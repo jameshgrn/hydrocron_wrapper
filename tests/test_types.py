@@ -74,37 +74,88 @@ def test_hydrocron_field():
     assert HydrocronField.WSE.value in default_fields
     assert HydrocronField.WIDTH.value in default_fields
 
+    # Test all fields
+    all_fields = HydrocronField.get_all_fields()
+    assert len(all_fields) == 6
+    assert all(f.value in all_fields for f in HydrocronField)
+
 def test_timeseries_request():
     """Test TimeseriesRequest validation"""
     # Test valid request
     request = TimeseriesRequest(
         feature=FeatureType.REACH,
-        feature_id="63470800171",
+        feature_id="12345678901",  # Valid REACH ID format
         start_time="2024-02-01T00:00:00Z",
         end_time="2024-02-08T00:00:00Z",
         fields=["reach_id", "time_str", "wse"]
     )
     assert request.feature == FeatureType.REACH
-    assert request.feature_id == "63470800171"
+    assert request.feature_id == "12345678901"
     assert request.output == OutputFormat.CSV  # default value
     assert request.compact is None  # default value
 
-    # Test invalid feature type
-    with pytest.raises(ValidationError):
+    # Test invalid feature ID format
+    with pytest.raises(ValidationError) as exc_info:
         TimeseriesRequest(
-            feature="InvalidType",
-            feature_id="63470800171",
+            feature=FeatureType.REACH,
+            feature_id="invalid",  # Wrong format
             start_time="2024-02-01T00:00:00Z",
             end_time="2024-02-08T00:00:00Z",
             fields=["reach_id", "time_str", "wse"]
         )
+    assert "Invalid Reach ID format" in str(exc_info.value)
 
-    # Test missing required fields
-    with pytest.raises(ValidationError):
+    # Test invalid fields
+    with pytest.raises(ValidationError) as exc_info:
         TimeseriesRequest(
             feature=FeatureType.REACH,
-            feature_id="63470800171",
+            feature_id="12345678901",
             start_time="2024-02-01T00:00:00Z",
             end_time="2024-02-08T00:00:00Z",
-            fields=[]  # empty fields list
-        ) 
+            fields=["invalid_field"]
+        )
+    assert "Invalid fields" in str(exc_info.value)
+
+    # Test invalid time format
+    with pytest.raises(ValidationError) as exc_info:
+        TimeseriesRequest(
+            feature=FeatureType.REACH,
+            feature_id="12345678901",
+            start_time="invalid_time",
+            end_time="2024-02-08T00:00:00Z",
+            fields=["reach_id", "time_str", "wse"]
+        )
+    assert "Time must be in ISO format" in str(exc_info.value)
+
+    # Test invalid time range
+    with pytest.raises(ValidationError) as exc_info:
+        TimeseriesRequest(
+            feature=FeatureType.REACH,
+            feature_id="12345678901",
+            start_time="2024-02-08T00:00:00Z",  # Later than end_time
+            end_time="2024-02-01T00:00:00Z",
+            fields=["reach_id", "time_str", "wse"]
+        )
+    assert "start_time must be before end_time" in str(exc_info.value)
+
+    # Test node ID format
+    request = TimeseriesRequest(
+        feature=FeatureType.NODE,
+        feature_id="12345678901234",  # Valid NODE ID format
+        start_time="2024-02-01T00:00:00Z",
+        end_time="2024-02-08T00:00:00Z",
+        fields=["reach_id", "time_str", "wse"]
+    )
+    assert request.feature == FeatureType.NODE
+    assert request.feature_id == "12345678901234"
+
+    # Test prior lake ID format
+    request = TimeseriesRequest(
+        feature=FeatureType.PRIOR_LAKE,
+        feature_id="1234567890",  # Valid PRIOR_LAKE ID format
+        start_time="2024-02-01T00:00:00Z",
+        end_time="2024-02-08T00:00:00Z",
+        fields=["reach_id", "time_str", "wse"]
+    )
+    assert request.feature == FeatureType.PRIOR_LAKE
+    assert request.feature_id == "1234567890" 
