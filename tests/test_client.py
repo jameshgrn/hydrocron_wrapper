@@ -6,11 +6,15 @@ import pytest
 import responses
 import pandas as pd
 from requests.exceptions import RequestException
+import geopandas as gpd
+from shapely.geometry import Point, LineString
+from pydantic import ValidationError
 
 from hydrocron_wrapper import (
     HydrocronClient, HydrocronConfig, 
     FeatureType, OutputFormat, HydrocronError,
-    HydrocronValidationError, HydrocronAPIError
+    HydrocronValidationError, HydrocronAPIError,
+    ResponseFormat
 )
 
 @pytest.fixture
@@ -48,11 +52,22 @@ def mock_geojson_response() -> Dict[str, Any]:
                 },
                 "geometry": {
                     "type": "LineString",
-                    "coordinates": [[-45.845445, -16.166559]]
+                    "coordinates": [
+                        [-45.845445, -16.166559],
+                        [-45.845500, -16.166600]
+                    ]
                 }
             }
         ]
     }
+
+@pytest.fixture
+def mock_client():
+    """Create a test client with mocked requests"""
+    client = HydrocronClient()
+    # Mock the _make_request method
+    client._make_request = lambda *args, **kwargs: {}
+    return client
 
 def test_client_initialization():
     """Test client initialization with different configs"""
@@ -74,8 +89,8 @@ def test_client_initialization():
     assert client.config.timeout == 60
 
     # Test invalid config
-    with pytest.raises(HydrocronValidationError):
-        HydrocronClient(HydrocronConfig(timeout=-1))
+    with pytest.raises(ValidationError):
+        HydrocronConfig(timeout=-1)
 
 @responses.activate
 def test_get_timeseries_csv(client, mock_csv_response):
@@ -105,11 +120,24 @@ def test_get_timeseries_csv(client, mock_csv_response):
 @responses.activate
 def test_get_timeseries_geojson(client, mock_geojson_response):
     """Test getting time series data in GeoJSON format"""
-    # Setup mock response
+    # Print the mock response for debugging
+    print(f"\nMock GeoJSON response: {mock_geojson_response}")
+    
+    # Setup mock response with GeoJSON directly in results
+    mock_full_response = {
+        'status': '200 OK',
+        'time': 123.45,
+        'hits': 1,
+        'results': {
+            'geojson': mock_geojson_response
+        }
+    }
+    print(f"\nFull mock response: {mock_full_response}")
+    
     responses.add(
         responses.GET,
         f"{client.config.base_url}/timeseries",
-        json=mock_geojson_response,
+        json=mock_full_response,
         status=200
     )
 
@@ -122,11 +150,16 @@ def test_get_timeseries_geojson(client, mock_geojson_response):
         output_format=OutputFormat.GEOJSON
     )
 
+    # Print result for debugging
+    print(f"\nParsed result: {result}")
+
     # Verify response
-    assert isinstance(result, dict)
-    assert result['type'] == 'FeatureCollection'
-    assert len(result['features']) == 1
-    assert result['features'][0]['properties']['reach_id'] == "63470800171"
+    assert isinstance(result, gpd.GeoDataFrame)
+    assert len(result) == 1
+    assert result.iloc[0]['reach_id'] == "63470800171"
+    assert 'wse' in result.columns
+    assert 'time_str' in result.columns
+    assert isinstance(result.geometry.iloc[0], LineString)
 
 @responses.activate
 def test_get_timeseries_error_handling(client):
@@ -182,3 +215,49 @@ def test_invalid_time_format(client):
             start_time="invalid_time",
             end_time="invalid_time"
         ) 
+
+def test_csv_response_parsing(mock_client):
+    """Test parsing CSV response"""
+    mock_response = {
+        'status': '200 OK',
+        'time': 123.45,
+        'hits': 2,
+        'results': {
+            'csv': 'reach_id,time_str,wse\n123,2024-01-01,100.5\n123,2024-01-02,101.2'
+        }
+    }
+    
+    df = mock_client._parse_csv_response(mock_response)
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 2
+    assert list(df.columns) == ['reach_id', 'time_str', 'wse']
+
+def test_geojson_response_parsing(mock_client):
+    """Test parsing GeoJSON response"""
+    mock_response = {
+        'status': '200 OK',
+        'time': 123.45,
+        'hits': 1,
+        'results': {
+            'geojson': {
+                'type': 'FeatureCollection',
+                'features': [{
+                    'type': 'Feature',
+                    'properties': {
+                        'reach_id': '123',
+                        'wse': 100.5
+                    },
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [0, 0]
+                    }
+                }]
+            }
+        }
+    }
+    
+    gdf = mock_client._parse_geojson_response(mock_response)
+    assert isinstance(gdf, gpd.GeoDataFrame)
+    assert len(gdf) == 1
+    assert gdf.iloc[0]['reach_id'] == '123'
+    assert isinstance(gdf.geometry.iloc[0], Point) 

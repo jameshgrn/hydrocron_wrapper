@@ -8,7 +8,9 @@ from .client import (
 )
 from .types import (
     HydrocronConfig, FeatureType, OutputFormat, 
-    HydrocronField, TimeseriesRequest
+    HydrocronField, TimeseriesRequest,
+    ResponseFormat, TimeseriesResponse,
+    GeoJSONResponse, CSVResponse
 )
 
 __all__ = [
@@ -18,6 +20,10 @@ __all__ = [
     'OutputFormat',
     'HydrocronField',
     'TimeseriesRequest',
+    'ResponseFormat',
+    'TimeseriesResponse',
+    'GeoJSONResponse', 
+    'CSVResponse',
     'HydrocronError',
     'HydrocronValidationError',
     'HydrocronAPIError'

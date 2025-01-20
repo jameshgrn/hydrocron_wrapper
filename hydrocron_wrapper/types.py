@@ -1,8 +1,10 @@
 from enum import Enum
-from typing import Optional, List, Set, Any, TypeVar
+from typing import Optional, List, Set, Any, TypeVar, Dict, Union
 from datetime import datetime
 import re
 from pydantic import BaseModel, Field, field_validator, model_validator, ValidationInfo
+
+from .config import PRODUCTION_BASE_URL, DEFAULT_TIMEOUT
 
 # Type variable for model validators
 ModelT = TypeVar('ModelT', bound=BaseModel)
@@ -33,14 +35,23 @@ class HydrocronField(str, Enum):
     REACH_ID = "reach_id"
     TIME = "time_str"
     WSE = "wse"
+    WSE_UNITS = "wse_units"
     WIDTH = "width"
+    WIDTH_UNITS = "width_units"
     SLOPE = "slope"
     GEOMETRY = "geometry"
     
     @classmethod
     def default_fields(cls) -> List[str]:
-        """Returns commonly used fields"""
-        return [cls.REACH_ID.value, cls.TIME.value, cls.WSE.value, cls.WIDTH.value]
+        """Returns commonly used fields with their required unit fields"""
+        return [
+            cls.REACH_ID.value,
+            cls.TIME.value,
+            cls.WSE.value,
+            cls.WSE_UNITS.value,
+            cls.WIDTH.value,
+            cls.WIDTH_UNITS.value
+        ]
     
     @classmethod
     def get_all_fields(cls) -> Set[str]:
@@ -51,11 +62,11 @@ class HydrocronConfig(BaseModel):
     """Configuration for Hydrocron API client"""
     api_key: Optional[str] = Field(default=None, description="Optional API key for authentication")
     base_url: str = Field(
-        default="https://soto.podaac.earthdatacloud.nasa.gov/hydrocron/v1",
+        default=PRODUCTION_BASE_URL,
         description="Base URL for the Hydrocron API"
     )
     timeout: int = Field(
-        default=30,
+        default=DEFAULT_TIMEOUT,
         description="Request timeout in seconds",
         gt=0
     )
@@ -123,7 +134,7 @@ class TimeseriesRequest(BaseModel):
             
     @model_validator(mode='after')
     @classmethod
-    def validate_time_range(cls, data: "TimeseriesRequest") -> "TimeseriesRequest":
+    def validate_time_range(cls, data: "TimeseriesRequest", info: ValidationInfo) -> "TimeseriesRequest":
         """Validate that start_time is before end_time"""
         start = datetime.fromisoformat(data.start_time.replace('Z', '+00:00'))
         end = datetime.fromisoformat(data.end_time.replace('Z', '+00:00'))
@@ -132,3 +143,33 @@ class TimeseriesRequest(BaseModel):
             raise ValueError("start_time must be before end_time")
             
         return data 
+
+class ResponseFormat(str, Enum):
+    """Valid response formats from Hydrocron API"""
+    CSV = "csv"
+    GEOJSON = "geojson"
+    JSON = "json"  # For metadata responses
+
+class TimeseriesResponse(BaseModel):
+    """Model for timeseries response data"""
+    status: str
+    time: float
+    hits: int
+    results: Dict[str, Any]
+
+class GeoJSONFeature(BaseModel):
+    """Model for GeoJSON feature"""
+    id: str
+    type: str = "Feature"
+    properties: Dict[str, Any]
+    geometry: Dict[str, Any]
+
+class GeoJSONResponse(BaseModel):
+    """Model for GeoJSON response"""
+    type: str = "FeatureCollection"
+    features: List[GeoJSONFeature]
+
+class CSVResponse(BaseModel):
+    """Model for CSV response data"""
+    data: str
+    fields: List[str] 

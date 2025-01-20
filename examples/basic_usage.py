@@ -4,7 +4,7 @@ from typing import Union, Dict, Any
 import pandas as pd
 from dotenv import load_dotenv
 
-from hydrocron_wrapper.client import HydrocronClient
+from hydrocron_wrapper.client import HydrocronClient, ResponseFormat
 from hydrocron_wrapper.types import HydrocronConfig, FeatureType, OutputFormat
 
 def main():

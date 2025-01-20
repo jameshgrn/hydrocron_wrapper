@@ -504,9 +504,7 @@ params = {
 response = requests.get(url=url, headers=headers, params=params)
 ```
 
-Replace `<podaac-provided-api-key>` with the API key provided to you.
-
-# Handling Time
+Replace `<podaac-provided-api-key>` with the API key provided to you.# Handling Time
 
 SWOT source data is organized to include all of the features from the prior river and lake databases that the satellite crosses over during each pass of a continent.
 If for any reason SWOT does not record an observation of a prior database feature during a pass, the source data will contain fillvalues for all observed fields, including the time of observation.
@@ -522,3 +520,4 @@ To retain times where there was a satellite pass but no observation was made, Hy
 | 71224100283 | no_data             |2023-08-01T12:30:30 | -999999999999.0000|     |
 
 In this case, querying Hydrocron using a start_time of 2023-08-01T12:30:00 will return all three features, becasue it is the pass start time that is used in the query. The returned data will include the actual observation time, including the no_data value for the feature that was not observed.
+
